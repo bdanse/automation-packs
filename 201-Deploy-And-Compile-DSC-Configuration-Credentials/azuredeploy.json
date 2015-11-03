@@ -1,10 +1,10 @@
 {
-  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "$schema": "http://schemas.microsoft.org/azure/deploymentTemplate?api-version=2015-01-01-preview#",
   "contentVersion": "1.0.0.0",
   "parameters": {
     "accountName": {
       "type": "string",
-      "defaultValue": "MyAutomationAccount",
+      "defaultValue": "myAccountName",
       "metadata": {
         "description": "The name of the Automation account to use.  If this account exists, check the SKU and tags to make sure they match the exisitng account."
       }
@@ -21,6 +21,13 @@
       ],
       "metadata": {
         "description": "The region the Automation account is located in."
+      }
+    },
+    "baseURI": {
+      "type": "string",
+      "defaultValue": "https://raw.githubusercontent.com/bdanse/automation-packs/master",
+      "metadata": {
+        "description": "Base URI for easier reference of resources"
       }
     },
     "credentialName": {
@@ -65,28 +72,6 @@
         "description": "The value for the variable.  Make sure the value for the variable matches the type selected."
       }
     },
-    "configurationName": {
-      "type": "string",
-      "defaultValue": "domainJoin",
-      "metadata": {
-        "description": "The name of the DSC Configuration. The name must match the name in the URI."
-      }
-    },
-    "configurationURI": {
-      "type": "string",
-      "defaultValue": "https://raw.githubusercontent.com/bdanse/automation-packs/master/201-Deploy-And-Compile-DSC-Configuration-Credentials/Configurations/dscDomainJoin.ps1",
-
-      "metadata": {
-        "description": "The URI for the DSC configuration "
-      }
-    },
-    "configurationDescription": {
-      "type": "string",
-      "defaultValue": "test",
-      "metadata": {
-        "description": "The description of the configuration."
-      }
-    },
     "jobId": {
       "type": "string",
       "metadata": {
@@ -103,17 +88,24 @@
   "variables": {
     "pricingTier": "Free",
     "dscOverwrite": "true",
-    "dscModules": {
-      "xComputerManagement": {
+    "credentialTemplateURI": "[concat(parameters('baseURI'), '/000-base-automation-resource-templates/deploy-credential/deployCredential.json')]",
+    "variableTemplateURI": "[concat(parameters('baseURI'), '/000-base-automation-resource-templates/deploy-variable/deployVariable.json')]",
+    "modulesTemplateURI": "[concat(parameters('baseURI'), '/000-base-automation-resource-templates/deploy-module/DeployModule.json')]",
+    "configurationTemplateURI": "[concat(parameters('baseURI'), '/000-base-automation-resource-templates/deploy-configuration/deployConfiguration.json')]",
+    "compilationJobTemplateURI": "[concat(parameters('baseURI'), '/000-base-automation-resource-templates/deploy-compilationjob/deployParameterCompilationjob.json')]",
+    "dscModules": [
+      {
         "moduleName": "xComputerManagement",
-        "moduleUri": "https://raw.githubusercontent.com/bdanse/automation-packs/master/201-Deploy-And-Compile-DSC-Configuration-Credentials/Configurations/Modules/xComputerManagement.zip"
+        "moduleUri": "[concat(parameters('baseURI'), '/201-Deploy-And-Compile-DSC-Configuration-Credentials/Configurations/Modules/xComputerManagement.zip')]"
       },
-      "xActiveDirectory": {
+      {
         "moduleName": "xActiveDirectory",
-        "moduleUri": "https://raw.githubusercontent.com/bdanse/automation-packs/master/201-Deploy-And-Compile-DSC-Configuration-Credentials/Configurations/Modules/xActiveDirectory.zip"
-
+        "moduleUri": "[concat(parameters('baseURI'), '/201-Deploy-And-Compile-DSC-Configuration-Credentials/Configurations/Modules/xActiveDirectory.zip')]"
       }
-    }
+    ],
+    "configurationName": "domainJoin",
+    "configurationDescription": "The description of the configuration.",
+    "configurationURI": "[concat(parameters('baseURI'), '/201-Deploy-And-Compile-DSC-Configuration-Credentials/Configurations/dscDomainJoin.ps1')]"
   },
 
   "resources": [
@@ -131,108 +123,167 @@
       },
       "resources": [
         {
-          "name": "[concat(parameters('accountName'), '/', parameters('credentialName'))]",
-          "type": "microsoft.automation/automationAccounts/Credentials",
+          "name": "nestedCredentialTemplate",
+          "type": "Microsoft.Resources/deployments",
           "apiVersion": "2015-01-01-preview",
-          "tags": { },
           "dependsOn": [
             "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'))]"
           ],
           "properties": {
-            "userName": "[parameters('userName')]",
-            "password": "[parameters('password')]"
+            "mode": "incremental",
+            "templateLink": {
+              "uri": "[variables('credentialTemplateURI')]",
+              "contentVersion": "1.0"
+            },
+            "parameters": {
+              "accountName": {
+                "value": "[parameters('accountName')]"
+              },
+              "credentialName": {
+                "value": "[parameters('credentialName')]"
+              },
+              "userName": {
+                "value": "[parameters('userName')]"
+              },
+              "password": {
+                "value": "[parameters('password')]"
+              }
+            }
           }
         },
         {
-          "name": "[concat(parameters('accountName'), '/', parameters('variableName')) ]",
-          "type": "microsoft.automation/automationAccounts/Variables",
+          "name": "nestedVariableTemplate",
+          "type": "Microsoft.Resources/deployments",
           "apiVersion": "2015-01-01-preview",
-          "tags": { },
           "dependsOn": [
             "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'))]"
           ],
           "properties": {
-            "description": "",
-            "isEncrypted": 0,
-            "type": "[parameters('variableType')]",
-            "value": "[parameters('variableValue')]"
+            "mode": "incremental",
+            "templateLink": {
+              "uri": "[variables('variableTemplateURI')]",
+              "contentVersion": "1.0"
+            },
+            "parameters": {
+              "accountName": {
+                "value": "[parameters('accountName')]"
+              },
+              "variableName": {
+                "value": "[parameters('variableName')]"
+              },
+              "variableType": {
+                "value": "[parameters('variableType')]"
+              },
+              "variableValue": {
+                "value": "[parameters('variableValue')]"
+              }
+            }
+
 
           }
         },
         {
-          "name": "[concat(parameters('accountName'), '/', variables('dscModules').xComputerManagement.ModuleName)]",
-          "type": "microsoft.automation/automationAccounts/Modules",
-          "apiVersion": "2015-01-01-preview",
-          "tags": { },
+          "apiVersion": "2015-01-01",
+          "name": "[concat('nestedTemplateModule', variables('dscModules')[copyIndex()].moduleName)]",
+          "type": "Microsoft.Resources/deployments",
           "dependsOn": [
             "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'))]"
           ],
+          "copy": {
+            "name": "moduleCopy",
+            "count": "[length(variables('dscModules'))]"
+          },
           "properties": {
-            "contentLink": {
-              "uri": "[variables('dscModules').xComputerManagement.ModuleUri]"
+            "mode": "incremental",
+            "templateLink": {
+              "uri": "[variables('modulesTemplateURI')]",
+              "contentVersion": "1.0"
+            },
+            "parameters": {
+              "accountName": {
+                "value": "[parameters('accountName')]"
+              },
+              "moduleName": {
+                "value": "[variables('dscModules')[copyIndex()].moduleName]"
+              },
+              "moduleUri": {
+                "value": "[variables('dscModules')[copyIndex()].moduleUri]"
+              }
             }
           }
         },
         {
-          "name": "[concat(parameters('accountName'), '/', variables('dscModules').xActiveDirectory.ModuleName)]",
-          "type": "microsoft.automation/automationAccounts/Modules",
-          "apiVersion": "2015-01-01-preview",
-          "tags": { },
+          "apiVersion": "2015-01-01",
+          "name": "nestedDSCconfiguration",
+          "type": "Microsoft.Resources/deployments",
           "dependsOn": [
             "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'))]"
           ],
           "properties": {
-            "contentLink": {
-              "uri": "[variables('dscModules').xActiveDirectory.ModuleUri]"
+            "mode": "incremental",
+            "templateLink": {
+              "uri": "[variables('configurationTemplateURI')]",
+              "contentVersion": "1.0"
+            },
+            "parameters": {
+              "accountName": {
+                "value": "[parameters('accountName')]"
+              },
+              "location": {
+                "value": "[parameters('regionId')]"
+              },
+              "configurationName": {
+                "value": "[variables('configurationName')]"
+              },
+              "configurationDescription": {
+                "value": "[variables('configurationDescription')]"
+              },
+              "configurationURI": {
+                "value": "[variables('configurationURI')]"
+              }
             }
           }
         },
+
         {
-          "name": "[parameters('configurationName')]",
-          "type": "Configurations",
-          "apiVersion": "2015-01-01-preview",
-          "location": "[parameters('regionId')]",
-          "tags": { },
-          "dependsOn": [
-            "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'))]"
-          ],
-          "properties": {
-            "logVerbose": "false",
-            "description": "[parameters('configurationDescription')]",
-            "state": "Published",
-            "overwrite": "[variables('dscOverwrite')]",
-            "Source": {
-              "type": "uri",
-              "Value": "[parameters('configurationURI')]"
-            }
-          }
-        },
-        {
-          "name": "[parameters('jobId')]",
-          "type": "Compilationjobs",
-          "apiVersion": "2015-01-01-preview",
-          "location": "parameters('regionId')]",
-          "tags": { },
+          "apiVersion": "2015-01-01",
+          "name": "nestedTemplateCompilationjob",
+          "type": "Microsoft.Resources/deployments",
           "dependsOn": [
             "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'))]",
             "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'),'/Credentials/',parameters('credentialName'))]",
             "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'),'/Variables/',parameters('variableName'))]",
-            "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'),'/Modules/',variables('dscModules').xComputerManagement.ModuleName)]",
-            "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'),'/Modules/',variables('dscModules').xActiveDirectory.ModuleName)]",
-            "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'),'/Configurations/', parameters('configurationName'))]"
+            "[moduleCopy]",
+            "[concat('Microsoft.Automation/automationAccounts/', parameters('accountName'),'/Configurations/', variables('configurationName'))]"
           ],
           "properties": {
-            "configuration": {
-              "name": "[parameters('configurationName')]"
+            "mode": "incremental",
+            "templateLink": {
+              "uri": "[variables('compilationJobTemplateURI')]",
+              "contentVersion": "1.0"
             },
             "parameters": {
-              "ConfigurationData": "[parameters('jobConfigurationData')]"
+              "accountName": {
+                "value": "[parameters('accountName')]"
+              },
+              "location": {
+                "value": "[parameters('regionId')]"
+              },
+              "configurationName": {
+                "value": "[variables('configurationName')]"
+              },
+              "jobId": {
+                "value": "[parameters('jobId')]"
+              },
+              "jobParameters": {
+                "ConfigurationData": "[parameters('jobConfigurationData')]"
+              }
             }
           }
         }
       ]
     }
   ],
-  "outputs": {
-  }
+
+  "outputs": { }
 }
